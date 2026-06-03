@@ -1,0 +1,42 @@
+services:
+
+  auth-service:
+    build: services/auth-service
+    container_name: payshield-auth
+    ports:
+      - "8002:8080"
+    env_file: .env
+    environment:
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  backend-bff:
+    build: services/backend-bff
+    container_name: payshield-bff
+    ports:
+      - "8001:8080"
+    env_file: .env
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8080
+      TRANSACTION_SERVICE_URL: http://transaction-service:8080
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: unless-stopped
