@@ -18,7 +18,7 @@ MINIO_ACCESS_KEY    = os.getenv("MINIO_ROOT_USER", "minioadmin")
 MINIO_SECRET_KEY    = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
 S3_BUCKET_PROCESSED = os.getenv("S3_BUCKET_PROCESSED", "payshield-processed-data")
 
-REFERENCE_KEY = "features/reference_features.parquet"
+REFERENCE_KEY = "features/reference.parquet"
 TODAY         = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 OUTPUT_KEY    = f"inference/live_features_{TODAY}.parquet"
 

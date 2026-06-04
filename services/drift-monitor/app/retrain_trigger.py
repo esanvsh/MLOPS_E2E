@@ -129,7 +129,7 @@ def trigger_retraining(drift_event: dict[str, Any]) -> bool:
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     current_key   = f"inference/live_features_{today}.parquet"
-    reference_key = "features/reference_features.parquet"
+    reference_key = "features/reference.parquet"
 
     s3 = _s3()
     try:

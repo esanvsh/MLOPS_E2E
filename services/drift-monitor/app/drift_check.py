@@ -33,7 +33,7 @@ MIN_CURRENT_ROWS      = int(os.getenv("MIN_CURRENT_ROWS", "100"))
 
 KAFKA_TOPIC_DRIFT = "model.drift.detected"
 
-REFERENCE_KEY = "features/reference_features.parquet"
+REFERENCE_KEY = "features/reference.parquet"
 TODAY         = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 CURRENT_KEY   = f"inference/live_features_{TODAY}.parquet"
 
@@ -208,10 +208,15 @@ def main() -> None:
     drift_report.run(reference_data=ref_df, current_data=cur_df)
     drift_dict   = drift_report.as_dict()
 
-    drift_result  = drift_dict["metrics"][0]["result"]
-    drift_share   = drift_result.get("share_of_drifted_columns", 0.0)
-    dataset_drift = drift_result.get("dataset_drift", False)
-    drift_by_col  = drift_result.get("drift_by_columns", {})
+    # DataDriftPreset emits two metrics:
+    #   metrics[0] = DatasetDriftMetric  → summary stats, no drift_by_columns
+    #   metrics[1] = DataDriftTable      → per-column drift_by_columns
+    summary_result = drift_dict["metrics"][0]["result"]
+    table_result   = drift_dict["metrics"][1]["result"]
+
+    drift_share   = summary_result.get("share_of_drifted_columns", 0.0)
+    dataset_drift = summary_result.get("dataset_drift", False)
+    drift_by_col  = table_result.get("drift_by_columns", {})
 
     drifted_features = [
         {"feature": col, "score": info.get("drift_score", 0.0), "method": info.get("stattest_name", "")}
