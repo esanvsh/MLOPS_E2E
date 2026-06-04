@@ -69,9 +69,10 @@ Primary model: XGBoost with threshold=0.35 (maximize recall).
 - Feature service Kafka consumer group: feature-service-group
 
 ## Dataset
-- Kaggle IEEE-CIS Fraud Detection (590K rows)
-- Location: ml/data/ (gitignored)
-- isFraud: 0=genuine, 1=fraud (~3.5% fraud rate)
+- Kaggle IEEE-CIS (590,540 rows, 3.51% fraud)
+- Features: 39 engineered (see ml/feature_engineering/build_features.py)
+- Feature schema: s3://payshield-processed-data/features/feature_schema.json
+- Model: XGBoost v2 in MLflow Staging (fraud-risk-model)
 
 ## Docker Platform Notes
 - All services: use standard linux/amd64 images (x86_64 WSL2)
@@ -119,3 +120,56 @@ Transaction status lifecycle:
 PROCESSING (on create) → prediction scored → risk_level = HIGH/MEDIUM/LOW
 
 Tests: not yet written for Phase 2 services.
+
+---
+
+### Phase 3 — ML Training Pipeline ✅ COMPLETE
+Completed: 2026-06-04
+
+Dataset:
+- Kaggle IEEE-CIS Fraud Detection (590,540 transactions)
+- Located at: ml/data/raw/ (gitignored)
+- Fraud rate: ~3.51%
+- Train/Val/Test split: 80/10/10 (time-based, NOT random — by TransactionDT)
+
+Feature engineering:
+- Script: ml/feature_engineering/build_features.py
+- Input: raw CSVs → Output: parquet in MinIO (payshield-processed-data/features/)
+- Feature count: 39 features
+- PCA on V1-V339 (292 surviving cols → 5 components: V_pca_1 to V_pca_5, 98.2% variance)
+- Scaler: StandardScaler saved as preprocessor.pkl (fit on train only)
+- Reference data: 10,000 row sample for drift baseline
+
+Trained model:
+- Algorithm: XGBoost (tree_method="hist")
+- scale_pos_weight: 27.46 (computed from class imbalance)
+- Optimal threshold: 0.35 (default — no val candidate met recall≥0.80 & precision≥0.60)
+- Registered name: fraud-risk-model
+- Current version: 2 (Staging — promotion criteria not yet met)
+- MLflow experiment: payshield-fraud-detection
+
+Model metrics (v2, test set):
+- Recall:          0.756
+- Precision:       0.171
+- F1 Score:        0.279
+- ROC AUC:         0.887
+- PR AUC:          0.474
+- False Negatives: 539
+
+Top features by SHAP importance:
+1. amount_log
+2. V_pca_1
+3. is_late_night
+4. amount_x_hour
+5. C1 / C14
+
+MLflow artifacts (per run):
+- confusion_matrix.png, pr_curve.png, roc_curve.png
+- shap_summary.png, feature_importance.png
+- preprocessor.pkl, feature_schema.json
+
+Promotion gate (not yet passed):
+- recall ≥ 0.80, f1 ≥ 0.75, roc_auc ≥ 0.92
+- Requires richer features (Phase 4: device fingerprinting, merchant history)
+
+Tests: ml/tests/ — not yet written for Phase 3.

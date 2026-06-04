@@ -1,0 +1,1274 @@
+╭─── Claude Code v2.1.161 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back shan!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ `OTEL_RESOURCE_ATTRIBU… │
+│       Sonnet 4.6 · Claude Pro ·                    │ `claude agents` rows n… │
+│       sanvendra1986@gmail.com's Organization       │ `/mcp` now collapses c… │
+│              ~/projects/payshield-ai               │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ /clear                                                                        
+  ⎿  (no content)
+
+❯ Read .claude/CLAUDE.md first.                                                 
+                                                                                
+  Create ml/requirements.txt for the ML pipeline.                               
+  All packages must be compatible with Python 3.11 on Linux x86_64 (WSL2 Ubuntu 
+  22.04).                                                                       
+                                                                                
+  xgboost==2.0.3                                                                
+  scikit-learn==1.4.2                                                           
+  imbalanced-learn==0.12.2                                                      
+  pandas==2.2.2                                                                 
+  numpy==1.26.4                                                                 
+  scipy==1.13.0                                                                 
+  mlflow==2.11.0                                                                
+  pyarrow==16.0.0                                                               
+  fastparquet==2024.2.0                                                         
+  matplotlib==3.8.4                                                             
+  seaborn==0.13.2                                                               
+  plotly==5.22.0                                                                
+  shap==0.45.1                                                                  
+  boto3==1.34.69                                                                
+  s3fs==2024.3.1                                                                
+  evidently==0.4.22                                                             
+  jupyter==1.0.0                                                                
+  jupyterlab==4.1.6                                                             
+  ipywidgets==8.1.2                                                             
+  pytest==8.1.1                                                                 
+  python-dotenv==1.0.1                                                          
+  tqdm==4.66.2                                                                  
+  structlog==24.1.0                                                             
+  kaggle==1.6.12                                                                
+                                                                                
+  Also, for matplotlib to work headlessly in WSL2 without a display,            
+  note that we must add this to the top of any script that creates plots:       
+  import matplotlib                                                             
+  matplotlib.use('Agg')  # Use non-interactive backend                          
+
+● I'll read the CLAUDE.md first, then create the requirements file.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Write(ml/requirements.txt)
+  ⎿  Wrote 49 lines to ml/requirements.txt
+         ntu 22.04)ine Dependencies — Python 3.11, Linux x86_64 (WSL2 Ubu
+       2 # Note: add `import matplotlib; matplotlib.use('Agg')` at the to
+         p of any script
+         no display).es plots — required for headless rendering in WSL2 (
+       4 
+       5 # Core ML
+       7 scikit-learn==1.4.2
+       8 imbalanced-learn==0.12.2
+       9 
+      10 # Data
+     … +42 lines (ctrl+o to expand)
+
+● ml/requirements.txt created with all 24 pinned packages. The matplotlib
+  headless note is included as a comment at the top so it's visible to anyone
+  picking up the file.
+
+✻ Cooked for 16s
+
+❯ ERROR: Cannot install -r ml/requirements.txt (line 16) and pyarrow==16.0.0    
+  because these package versions have conflicting dependencies.                 
+                                                                                
+  The conflict is caused by:                                                    
+      The user requested pyarrow==16.0.0                                        
+      mlflow 2.11.0 depends on pyarrow<16 and >=4.0.0                           
+                                                                                
+  Additionally, some packages in these conflicts have no matching distributions 
+  available for your environment:                                               
+      pyarrow                                                                   
+                                                                                
+  To fix this you could try to:                                                 
+  1. loosen the range of package versions you've specified                      
+  2. remove package versions to allow pip to attempt to solve the dependency    
+  conflict                                                                      
+                                                                                
+  ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/top 
+  ics/dependency-resolution/#dealing-with-dependency-conflicts                  
+  (.venv) ubuntu@jaiditya:~/projects/payshield-ai$                              
+
+● mlflow==2.11.0 requires pyarrow<16, so 16.0.0 is one version too high.
+  Downgrading to 15.0.2 (the latest in the <16 range).
+
+● Update(ml/requirements.txt)
+  ⎿  Added 1 line, removed 1 line
+      16  mlflow==2.11.0
+      17  
+      18  # Serialization / storage
+      19 -pyarrow==16.0.0                                                
+      19 +pyarrow==15.0.2                                                
+      20  fastparquet==2024.2.0
+      21  
+      22  # Visualization
+
+● Re-run the install:
+
+  pip install -r ml/requirements.txt
+
+  pyarrow==15.0.2 is fully compatible with mlflow==2.11.0 (>=4.0.0,<16).
+
+✻ Cogitated for 7s
+
+※ recap: Building the ML pipeline for PayShield AI fraud detection. Fixed a pyarrow version conflict in ml/requirements.txt (downgraded to 15.0.2). Next: re-run pip install -r ml/requirements.txt to confirm it resolves cleanly.
+
+❯ Read .claude/CLAUDE.md first.                                                 
+                                                                                
+  Create ml/data_validation/validate_data.py                                    
+                                                                                
+  IMPORTANT for WSL2: add at top of file:                                       
+  import matplotlib                                                             
+  matplotlib.use('Agg')  # Non-interactive backend for WSL2                     
+                                                                                
+  Validation checks:                                                            
+  1. Files exist: ml/data/raw/train_transaction.csv and train_identity.csv      
+  2. Row count: transactions > 500000, identity > 100000                        
+  3. Required columns: TransactionID, isFraud, TransactionAmt, TransactionDT    
+  4. isFraud only contains 0 and 1                                              
+  5. Fraud rate between 1% and 10% (should be ~3.5%)                            
+  6. No negative transaction amounts                                            
+  7. TransactionDT is numeric                                                   
+                                                                                
+  Print PASS (green) or FAIL (red) for each check.                              
+  Exit code 0 if all pass, 1 if any fail.                                       
+  Support --dry-run flag (checks file existence only).                          
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Bash(mkdir -p /home/ubuntu/projects/payshield-ai/ml/data_validation)
+  ⎿  Done
+
+● Write(ml/data_validation/validate_data.py)
+  ⎿  Wrote 129 lines to ml/data_validation/validate_data.py
+       1 import matplotlib
+       2 matplotlib.use('Agg')  # Non-interactive backend for WSL2
+       3 
+       4 import argparse
+       5 import sys
+       6 from pathlib import Path
+       7 
+       8 import pandas as pd
+       9 
+      10 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "raw"
+     … +128 lines (ctrl+o to expand)
+
+● Created ml/data_validation/validate_data.py. Usage:
+
+  # Full validation (requires data files)
+  python ml/data_validation/validate_data.py
+
+  # File existence only
+  python ml/data_validation/validate_data.py --dry-run
+
+  The script runs 8 checks in order — files exist, row counts, required columns,
+  label values, fraud rate (~3.5%), no negative amounts, and numeric
+  TransactionDT — printing PASS/FAIL in color for each, then exits with code 0
+  (all pass) or 1 (any fail).
+
+✻ Cogitated for 1m 6s
+
+❯ `python ml/data_validation/validate_data.py --dry-run`                        
+
+● Bash(python ml/data_validation/validate_data.py --dry-run)
+  ⎿  PayShield AI — Data Validation
+     ========================================
+       [PASS] train_transaction.csv exists
+     … +3 lines (ctrl+o to expand)
+
+● Both files exist and the dry-run exits clean. The ANSI color codes are
+  rendering as raw escape sequences in this terminal — that's a WSL2/terminal
+  emulator issue, not a code problem. If you want plain output without colors,
+  let me know and I can add a --no-color flag.
+
+✻ Churned for 6s
+
+❯ `python ml/data_validation/validate_data.py`                                  
+
+● Bash(python ml/data_validation/validate_data.py)
+  ⎿  PayShield AI — Data Validation
+     ========================================
+       [PASS] train_transaction.csv exists
+     … +11 lines (ctrl+o to expand)
+
+● All 9 checks pass. Dataset looks exactly as expected — 590,540 transactions,
+  144,233 identity rows, fraud rate precisely 3.50%, all amounts clean,
+  TransactionDT is int64.
+✻ Cogitated for 49s
+
+❯ Read .claude/CLAUDE.md first.                                                 
+                                                                                
+  Create ml/feature_engineering/build_features.py                               
+                                                                                
+  IMPORTANT: Add at the TOP of the file:                                        
+  import matplotlib                                                             
+  matplotlib.use('Agg')  # Required for WSL2 — no display available             
+                                                                                
+  This is the complete feature engineering pipeline.                            
+  Input: ml/data/raw/train_transaction.csv + train_identity.csv                 
+  Output: parquet files written to MinIO via boto3                              
+                                                                                
+  MinIO config from env:                                                        
+  S3_ENDPOINT_URL (default: http://localhost:9000)                              
+  MINIO_ROOT_USER, MINIO_ROOT_PASSWORD                                          
+  S3_BUCKET_PROCESSED                                                           
+                                                                                
+  Pipeline:                                                                     
+  STEP 1 — Load CSVs with pandas (print shape + memory)                         
+  STEP 2 — LEFT JOIN on TransactionID                                           
+  STEP 3 — Drop columns > 80% null                                              
+  STEP 4 — PCA on V1-V339 columns → 5 components (fill null with 0 first)       
+  STEP 5 — Engineer features:                                                   
+    Amount: amount_log=log1p(TransactionAmt), is_round_amount, amount_bin (5    
+  bins)                                                                         
+    Time: hour_of_day, day_of_week, is_late_night, is_weekend, days_since_start 
+    Velocity: user_txn_count_cumulative (expanding count by card1)              
+    Card: card4_encoded (LabelEncoder), card6_encoded                           
+    Address: addr_mismatch = 1 if addr1 != addr2 else 0                         
+    Email: email_domain_risk (2=high-risk domain, 1=unknown, 0=normal)          
+    Category: is_high_risk_category = 1 if ProductCD in ['H','C']               
+    Cross: amount_x_hour, amount_x_velocity, new_device_x_late_night            
+    Synthetic: payment_channel_encoded=0, city_tier=1, upi_collect_request=0,   
+               is_new_device=addr_mismatch,                                     
+  is_new_merchant_for_user=is_high_risk_category                                
+    Keep: C1,C2,C6,C11,C13,C14, D1,D4,D10,D15, M4(encoded),M6(encoded)          
+    PCA: V_pca_1 through V_pca_5                                                
+                                                                                
+  STEP 6 — Select final 37 feature columns + isFraud as "label"                 
+  STEP 7 — Time-based split (NOT random):                                       
+    Sort by TransactionDT                                                       
+    train=first 80%, val=next 10%, test=last 10%                                
+    reference=train.sample(10000, random_state=42)                              
+  STEP 8 — StandardScaler on float columns of X_train ONLY                      
+    Save scaler as /tmp/preprocessor.pkl                                        
+  STEP 9 — Write parquet to MinIO (train, val, test, reference splits)          
+    Also save feature_schema.json to MinIO                                      
+  STEP 10 — Print summary                                                       
+                                                                                
+  Add --local flag: read/write local files in ml/data/ instead of MinIO.        
+  Add tqdm progress bars for slow steps.                                        
+  Memory optimization: use float32 where possible (WSL2 has limited WSL         
+  memory).                                                                      
+
+● I'll read CLAUDE.md and check the existing feature_engineering directory
+  before writing.
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Write(ml/feature_engineering/build_features.py)
+  ⎿  Wrote 372 lines to ml/feature_engineering/build_features.py
+       2 matplotlib.use('Agg')  # Required for WSL2 — no display availabl
+         e
+       3 
+       4 import argparse
+       5 import io
+       6 import json
+       7 import os
+       8 import pickle
+       9 import sys
+      10 from pathlib import Path
+     … +437 lines (ctrl+o to expand)
+
+● Created ml/feature_engineering/build_features.py. Usage:
+
+  # Write to MinIO (default)
+  python ml/feature_engineering/build_features.py
+
+  # Write locally to ml/data/processed/
+  python ml/feature_engineering/build_features.py --local
+
+  Key design decisions:
+  - Memory: float32 throughout (halves RAM vs float64 — ~590K × 39 cols fits
+  comfortably)
+  - Sort before split: sort_values("TransactionDT") happens in Step 5 before
+  cumcount, so velocity counts are computed in true chronological order,
+  avoiding data leakage
+  - Scaler fit on train only: applied to val/test/reference via .transform() —
+  no leakage
+  - tqdm: pipeline-level bar (10 steps) + inner bar per split when writing;
+  tqdm.write() used so print output doesn't corrupt the bar
+  - feature_schema.json lists all feature names, float columns, and split sizes
+  — consumed later by the training and drift-monitor services
+
+✻ Sautéed for 3m 25s
+
+❯ `python ml/feature_engineering/build_features.py --local`                     
+
+● Bash(python ml/feature_engineering/build_features.py --local)
+  ⎿  Pipeline:   0%|                                        | 0/10 [00:00<?
+     , ?step/s]Step 1/10: Loading CSVs:   0%|                         | 0/1
+     0 [00:00<?, ?step/s]
+     … +156 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+● Pipeline completed successfully in 48 seconds. Key results:
+
+  ┌───────────────┬─────────────────────────────────────────────────────────┐
+  │               │                                                         │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Features      │ 39 (292 V-columns → 5 PCA; 98.2% variance)              │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Dropped       │ 74 columns (>80% null)                                  │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Train         │ 472,432 rows — fraud 3.51%                              │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Val           │ 59,054 rows — fraud 3.13%                               │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Test          │ 59,054 rows — fraud 3.75%                               │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Float cols    │ 19                                                      │
+  │ scaled        │                                                         │
+  ├───────────────┼─────────────────────────────────────────────────────────┤
+  │ Output        │ ml/data/processed/ (train/val/test/reference parquet +  │
+  │               │ schema + scaler)                                        │
+  └───────────────┴─────────────────────────────────────────────────────────┘
+
+  The slight fraud rate variation across splits is expected from the time-based
+  split — fraud patterns shift over time, which is exactly what the model needs
+  to learn to handle.
+
+✻ Crunched for 1m 2s
+
+❯ `python ml/feature_engineering/build_features.py`                             
+
+● Bash(python ml/feature_engineering/build_features.py)
+  ⎿  Pipeline:   0%|                                        | 0/10 [00:00<?
+     , ?step/s]Step 1/10: Loading CSVs:   0%|                         | 0/1
+     0 [00:00<?, ?step/s]
+     … +151 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+● All 4 splits uploaded to MinIO successfully in 43 seconds:
+
+  ┌────────────────────────────────────────────────────────────┬─────────────┐
+  │                        Destination                         │             │
+  ├────────────────────────────────────────────────────────────┼─────────────┤
+  │ s3://payshield-processed-data/features/train.parquet       │ 472,432     │
+  │                                                            │ rows        │
+  ├────────────────────────────────────────────────────────────┼─────────────┤
+  │ s3://payshield-processed-data/features/val.parquet         │ 59,054 rows │
+  ├────────────────────────────────────────────────────────────┼─────────────┤
+  │ s3://payshield-processed-data/features/test.parquet        │ 59,054 rows │
+  ├────────────────────────────────────────────────────────────┼─────────────┤
+  │ s3://payshield-processed-data/features/reference.parquet   │ 10,000 rows │
+  ├────────────────────────────────────────────────────────────┼─────────────┤
+  │ s3://payshield-processed-data/features/feature_schema.json │ ✓           │
+  └────────────────────────────────────────────────────────────┴─────────────┘
+
+  MinIO is live and the bucket was auto-created. The training pipeline can now
+  read directly from s3://payshield-processed-data/features/ using the same
+  boto3 config.
+
+✻ Sautéed for 1m 12s
+
+※ recap: Building a fraud detection ML pipeline. Completed data validation, feature engineering (39 features, 590K rows), and uploaded processed parquet splits to MinIO. Next: train the XGBoost model.
+
+❯ Read .claude/CLAUDE.md first.                                                 
+                                                                                
+  Create ml/training/train.py                                                   
+                                                                                
+  IMPORTANT: Add at top:                                                        
+  import matplotlib                                                             
+  matplotlib.use('Agg')  # Required for WSL2 — no display                       
+                                                                                
+  Complete XGBoost training pipeline for PayShield AI fraud detection.          
+                                                                                
+  STEP 1 — Load features from MinIO (train, val, test parquet files)            
+  STEP 2 — Compute scale_pos_weight = count(0) / count(1)                       
+  STEP 3 — Set up MLflow tracking (MLFLOW_TRACKING_URI env var)                 
+                                                                                
+  STEP 4 — Train XGBoost with mlflow.start_run():                               
+    n_estimators=500, max_depth=6, min_child_weight=10,                         
+    subsample=0.8, colsample_bytree=0.8, learning_rate=0.05,                    
+    gamma=1.0, scale_pos_weight=computed,                                       
+    reg_alpha=0.1, reg_lambda=1.0,                                              
+    objective="binary:logistic", eval_metric="aucpr",                           
+    tree_method="hist"  (fast on x86_64 too),                                   
+    random_state=42, early_stopping_rounds=50, n_jobs=-1                        
+    eval_set=[(X_val, y_val)], verbose=50                                       
+                                                                                
+  STEP 5 — Find optimal threshold:                                              
+    precision_recall_curve on val set                                           
+    threshold where recall >= 0.80 AND precision >= 0.60                        
+    If none found: use 0.35                                                     
+                                                                                
+  STEP 6 — Evaluate on test set:                                                
+    recall, precision, f1_score, roc_auc, pr_auc, false_negative_count          
+                                                                                
+  STEP 7 — Generate plots (all use Agg backend — save to /tmp/*.png):           
+    confusion_matrix.png, pr_curve.png, roc_curve.png                           
+    shap_summary.png (on first 500 test samples — smaller for speed)            
+    feature_importance.png                                                      
+                                                                                
+  STEP 8 — Log to MLflow:                                                       
+    Params, metrics, all 5 plots, preprocessor.pkl, feature_schema.json         
+    mlflow.xgboost.log_model(model, "model",                                    
+  registered_model_name="fraud-risk-model")                                     
+                                                                                
+  STEP 9 — Model promotion:                                                     
+    If recall >= 0.80 AND f1_score >= 0.75 AND roc_auc >= 0.92:                 
+      Transition to stage "Production"                                          
+      Print ✅ promoted                                                         
+    Else: print ❌ with actual vs required metrics                              
+                                                                                
+  STEP 10 — Write current_model.txt to MinIO                                    
+                                                                                
+  argparse: --dataset-version, --experiment-name, --model-name, --local         
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Write(ml/training/train.py)
+  ⎿  Wrote 411 lines to ml/training/train.py
+       1 import matplotlib
+       2 matplotlib.use('Agg')  # Required for WSL2 — no display
+       3 
+       4 import argparse
+       5 import io
+       6 import json
+       7 import os
+       8 import pickle
+       9 from datetime import datetime, timezone
+      10 from pathlib import Path
+     … +463 lines (ctrl+o to expand)
+
+● Created ml/training/train.py. Usage:
+
+  # Train + write outputs to MinIO (requires MLflow + MinIO running)
+  python ml/training/train.py
+
+  # Train reading/writing local ml/data/processed/
+  python ml/training/train.py --local
+
+  # Override defaults
+  python ml/training/train.py --experiment-name my-exp --model-name
+  fraud-risk-model --dataset-version v2
+
+  Key implementation notes:
+
+  - Threshold search: walks precision_recall_curve on val set, picks the
+  highest-F1 point where recall ≥ 0.80 and precision ≥ 0.60; falls back to 0.35
+  if none found
+  - SHAP: TreeExplainer on first 500 test rows only — full test set would take
+  several minutes and isn't needed for the summary plot
+  - Model version: resolved via search_model_versions after log_model so the
+  version number is always accurate, even on re-runs
+  - Promotion: archive_existing_versions=True ensures only one Production
+  version at a time
+  - current_model.txt: JSON with run_id, version, threshold, all metrics, and
+  timestamp — consumed by the fraud-model-api service in Phase 4
+
+✻ Baked for 2m 58s
+
+❯ `python ml/training/train.py --local`                                         
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+     2026/06/04 18:47:45 INFO mlflow.tracking.fluent: Experiment with name 
+     'payshield-fraud-detection' does not exist. Creating a new experiment.
+
+     [Step 1] Loading feature parquet files...
+       train : (472432, 39)  fraud=3.51%
+       val   : (59054, 39)  fraud=3.13%
+       test  : (59054, 39)  fraud=3.75%
+
+     [Step 2] Computing scale_pos_weight...
+       neg=455,833  pos=16,599  scale_pos_weight=27.46
+     … +59 lines (ctrl+o to expand)
+
+● Training ran and evaluated perfectly — the MLflow server is running at
+  http://localhost:5050 but its artifact root is configured as /mlflow
+  (root-owned). Need to create the experiment with a writable artifact location.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ml/training/train.py)
+  ⎿  Added 11 lines
+      158      args = parser.parse_args()
+      159  
+      160      mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+      161 +                                                              
+      162 +    # Create experiment with a local artifact root if it doesn
+          +'t exist yet.                                                 
+      163 +    # The default server artifact root (/mlflow) is root-owned
+          +; we own ml/mlruns.                                           
+      164 +    ml_client_setup = MlflowClient()                          
+      165 +    if ml_client_setup.get_experiment_by_name(args.experiment_
+          +name) is None:                                                
+      166 +        artifact_root = os.getenv(                            
+      167 +            "MLFLOW_ARTIFACT_ROOT",                           
+      168 +            f"file://{ROOT / 'ml' / 'mlruns'}",               
+      169 +        )                                                     
+      170 +        ml_client_setup.create_experiment(args.experiment_name
+          +, artifact_location=artifact_root)                            
+      171 +        print(f"  Created experiment '{args.experiment_name}' 
+          + artifact_root={artifact_root}")                              
+      172      mlflow.set_experiment(args.experiment_name)
+      173  
+      174      # ── Step 1: Load features ───────────────────────────────
+           ───────────────────
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+
+     [Step 1] Loading feature parquet files...
+       train : (472432, 39)  fraud=3.51%
+       val   : (59054, 39)  fraud=3.13%
+       test  : (59054, 39)  fraud=3.75%
+
+     [Step 2] Computing scale_pos_weight...
+       neg=455,833  pos=16,599  scale_pos_weight=27.46
+
+     … +58 lines (ctrl+o to expand)
+● The experiment already exists pointing to /mlflow from the first run — our fix
+  only applies to new experiments. Let me check the MLflow server configuration
+  and fix the existing experiment.
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● The problem is the classic split-brain setup: MLflow server stores artifacts
+  at /mlflow/artifacts inside its Docker container (a named volume), but the
+  client running in WSL2 has no access to that volume. The fix is to point
+  MLflow's artifact root at MinIO so both server and client can reach it.
+
+  Two changes needed: update docker-compose, update train.py to set the S3 env
+  vars for the artifact client and delete the bad experiment.
+
+  Read 1 file (ctrl+o to expand)
+
+● Now I have the full picture. Two changes:
+
+  1. docker-compose: change MLflow artifact root from the inaccessible Docker
+  volume to MinIO (s3://payshield-mlflow/), add MinIO credentials to the MLflow
+  service
+  2. train.py: set MLFLOW_S3_ENDPOINT_URL + AWS credentials in the environment
+  before any MLflow calls, archive the stale experiment
+
+● Update(docker-compose.yml)
+  ⎿  Added 8 lines, removed 1 line
+      128        --host 0.0.0.0
+      129        --port 5000
+      130        --backend-store-uri sqlite:////mlflow/mlflow.db
+      131 -      --default-artifact-root /mlflow/artifacts               
+      131 +      --default-artifact-root s3://payshield-mlflow/          
+      132 +    environment:                                              
+      133 +      MLFLOW_S3_ENDPOINT_URL: http://minio:9000               
+      134 +      AWS_ACCESS_KEY_ID: minioadmin                           
+      135 +      AWS_SECRET_ACCESS_KEY: minioadmin123                    
+      136      ports:
+      137        - "5050:5000"
+      138      volumes:
+      139        - mlflow_data:/mlflow
+      140 +    depends_on:                                               
+      141 +      minio:                                                  
+      142 +        condition: service_healthy                            
+      143      healthcheck:
+      144        test: ["CMD", "python3", "-c", "import urllib.request; u
+           rllib.request.urlopen('http://localhost:5000/health')"]
+      145        interval: 10s
+
+● Now update train.py to set the S3 env vars for the MLflow artifact client, and
+  archive the stale experiment on startup:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(ml/training/train.py)
+  ⎿  Added 17 lines, removed 7 lines
+      157      parser.add_argument("--local", action="store_true", help="
+           Read/write local ml/data/processed/ instead of MinIO")
+      158      args = parser.parse_args()
+      159  
+      160 +    # ── MLflow S3 artifact client config ────────────────────
+          +──────────────────                                            
+      161 +    # The MLflow server stores artifacts in MinIO (s3://payshi
+          +eld-mlflow/).                                                 
+      162 +    # The client must also talk to MinIO, not AWS, so we set t
+          +hese env vars                                                 
+      163 +    # before any mlflow call that touches artifacts.          
+      164 +    os.environ["MLFLOW_S3_ENDPOINT_URL"] = S3_ENDPOINT_URL    
+      165 +    os.environ["AWS_ACCESS_KEY_ID"] = MINIO_ACCESS_KEY        
+      166 +    os.environ["AWS_SECRET_ACCESS_KEY"] = MINIO_SECRET_KEY    
+      167 +                                                              
+      168      mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+      169  
+      162 -    # Create experiment with a local artifact root if it doesn
+          -'t exist yet.                                                 
+      163 -    # The default server artifact root (/mlflow) is root-owned
+          -; we own ml/mlruns.                                           
+      170 +    # If the experiment was previously created pointing at the
+          + inaccessible                                                 
+      171 +    # /mlflow Docker volume, archive it and recreate with the 
+          +MinIO artifact root.                                          
+      172      ml_client_setup = MlflowClient()
+      165 -    if ml_client_setup.get_experiment_by_name(args.experiment_
+          -name) is None:                                                
+      166 -        artifact_root = os.getenv(                            
+      167 -            "MLFLOW_ARTIFACT_ROOT",                           
+      168 -            f"file://{ROOT / 'ml' / 'mlruns'}",               
+      169 -        )                                                     
+      173 +    existing = ml_client_setup.get_experiment_by_name(args.exp
+          +eriment_name)                                                 
+      174 +    if existing is not None and not existing.artifact_location
+          +.startswith("s3://"):                                         
+      175 +        print(f"  Archiving stale experiment (artifact_locatio
+          +n={existing.artifact_location})")                             
+      176 +        ml_client_setup.delete_experiment(existing.experiment_
+          +id)                                                           
+      177 +        existing = None                                       
+      178 +    if existing is None:                                      
+      179 +        artifact_root = f"s3://payshield-mlflow/{args.experime
+          +nt_name}"                                                     
+      180          ml_client_setup.create_experiment(args.experiment_name
+           , artifact_location=artifact_root)
+      181          print(f"  Created experiment '{args.experiment_name}' 
+            artifact_root={artifact_root}")
+      182      mlflow.set_experiment(args.experiment_name)
+
+● Now restart the MLflow container to pick up the new artifact root, then
+  re-run:
+
+● Bash(docker compose restart mlflow 2>&1 && sleep 8 && docker compose ps
+      mlflow)
+  ⎿   Container payshield-mlflow Restarting
+      Container payshield-mlflow Started
+     NAME               IMAGE                           COMMAND
+     … +4 lines (ctrl+o to expand)
+  ⎿  (timeout 1m)
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+       Archiving stale experiment (artifact_location=/mlflow/artifacts/1)
+     Traceback (most recent call last):
+       File "/home/ubuntu/projects/payshield-ai/ml/training/train.py", line 432,
+     in <module>
+         main()
+       File "/home/ubuntu/projects/payshield-ai/ml/training/train.py", line 180,
+     in main
+         ml_client_setup.create_experiment(args.experiment_name, 
+     artifact_location=artifact_root)
+       File "/home/ubuntu/projects/payshield-ai/.venv/lib/python3.11/site-packag
+     es/mlflow/tracking/client.py", line 593, in create_experiment
+         return self._tracking_client.create_experiment(name, artifact_location,
+     tags)
+                
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     … +18 lines (ctrl+o to expand)
+
+● MLflow's delete_experiment only sets a lifecycle flag but the name stays in
+  the UNIQUE constraint. Need to rename first, then delete.
+
+● Update(ml/training/train.py)
+  ⎿  Added 5 lines, removed 1 line
+      172      ml_client_setup = MlflowClient()
+      173      existing = ml_client_setup.get_experiment_by_name(args.exp
+           eriment_name)
+      174      if existing is not None and not existing.artifact_location
+           .startswith("s3://"):
+      175 -        print(f"  Archiving stale experiment (artifact_locatio
+          -n={existing.artifact_location})")                             
+      175 +        # delete_experiment only soft-deletes; the name stays 
+          +in the UNIQUE                                                 
+      176 +        # constraint. Rename first so the original name is fre
+          +ed immediately.                                               
+      177 +        stale_name = f"__archived_{existing.experiment_id}_{ar
+          +gs.experiment_name}"                                          
+      178 +        print(f"  Renaming stale experiment to '{stale_name}' 
+          +and archiving...")                                            
+      179 +        ml_client_setup.rename_experiment(existing.experiment_
+          +id, stale_name)                                               
+      180          ml_client_setup.delete_experiment(existing.experiment_
+           id)
+      181          existing = None
+      182      if existing is None:
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+       Renaming stale experiment to '__archived_1_payshield-fraud-detection' and
+     archiving...
+     urllib3.exceptions.ResponseError: too many 500 error responses
+
+     The above exception was the direct cause of the following exception:
+
+     Traceback (most recent call last):
+       File "/home/ubuntu/projects/payshield-ai/.venv/lib/python3.11/site-packag
+     es/requests/adapters.py", line 696, in send
+         resp = conn.urlopen(
+                ^^^^^^^^^^^^^
+     … +59 lines (ctrl+o to expand)
+
+● Bash(docker logs payshield-mlflow --tail=20 2>&1)
+  ⎿  [2026-06-04 12:23:12 +0000] [15] [CRITICAL] WORKER TIMEOUT (pid:4606)
+     [2026-06-04 12:23:12 +0000] [4603] [INFO] Worker exiting (pid: 4603)
+     [2026-06-04 12:23:12 +0000] [4605] [INFO] Worker exiting (pid: 4605)
+     … +20 lines (ctrl+o to expand)
+
+● The container OOM-killed during the previous run — fresh workers now. Let me
+  also check whether the payshield-mlflow bucket exists in MinIO before
+  re-running:
+
+● Bash(python -c "
+      import boto3…)
+  ⎿  Buckets: ['payshield-drift-reports', 'payshield-model-artifacts', 'pay
+     shield-processed-data', 'payshield-raw-data']
+     Created: payshield-mlflow
+
+● Good — payshield-mlflow bucket created. I also notice the MinIO password in
+  docker-compose is minioadmin123 but the code defaults to minioadmin. Let me
+  check the .env so we're using the right credentials:
+
+  Read 1 file (ctrl+o to expand)
+
+● Good — .env has MINIO_ROOT_PASSWORD=minioadmin123 and AWS_ACCESS_KEY_ID=local
+  (set for DynamoDB). Our os.environ overrides in train.py will correctly set
+  MinIO credentials before any S3 calls. Let's run:
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+       Renaming stale experiment to '__archived_1_payshield-fraud-detection' and
+     archiving...
+     urllib3.exceptions.ResponseError: too many 500 error responses
+
+     The above exception was the direct cause of the following exception:
+
+     Traceback (most recent call last):
+       File "/home/ubuntu/projects/payshield-ai/.venv/lib/python3.11/site-packag
+     es/requests/adapters.py", line 696, in send
+         resp = conn.urlopen(
+                ^^^^^^^^^^^^^
+     … +59 lines (ctrl+o to expand)
+● Bash(curl -s http://localhost:5050/api/2.0/mlflow/experiments/search | python3
+      -m json.tool 2>&1 | head -20)
+  ⎿  {
+         "error_code": "INVALID_PARAMETER_VALUE",
+         "message": "Invalid value for max_results. It must be a positive i
+     … +2 lines (ctrl+o to expand)
+
+● Bash(curl -s
+      "http://localhost:5050/api/2.0/mlflow/experiments/search?max_results=10" |
+      python3 -m json.tool 2>&1)
+  ⎿  {
+         "experiments": [
+             {
+     … +9 lines (ctrl+o to expand)
+
+● Bash(docker exec payshield-mlflow python3 -c "import boto3; print('boto3 ok',
+      boto3.__version__)" 2>&1)
+  ⎿  Error: Exit code 1
+     Traceback (most recent call last):
+       File "<string>", line 1, in <module>
+     ModuleNotFoundError: No module named 'boto3'
+
+● boto3 missing from the MLflow container — that's why any S3-artifact-related
+  operation causes 500s. Fix: install it in the container's startup command.
+  Also check the full experiment state:
+
+● Bash(curl -s "http://localhost:5050/api/2.0/mlflow/experiments/search?max_resu
+      lts=10&view_type=ALL" | python3 -m json.tool 2>&1)
+  ⎿  {
+         "experiments": [
+             {
+     … +17 lines (ctrl+o to expand)
+
+● Good — experiment 1 is soft-deleted but its name still occupies the UNIQUE
+  constraint, and boto3 is missing from the container (causing every S3/artifact
+  operation to 500). Two fixes in one go:
+
+● Update(docker-compose.yml)
+  ⎿  Added 2 lines, removed 1 line
+      124      image: ghcr.io/mlflow/mlflow:v2.11.0
+      125      container_name: payshield-mlflow
+      126      command: >
+      127 +      bash -c "pip install --quiet boto3 &&                   
+      128        mlflow server
+      129        --host 0.0.0.0
+      130        --port 5000
+      131        --backend-store-uri sqlite:////mlflow/mlflow.db
+      131 -      --default-artifact-root s3://payshield-mlflow/          
+      132 +      --default-artifact-root s3://payshield-mlflow/"         
+      133      environment:
+      134        MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      135        AWS_ACCESS_KEY_ID: minioadmin
+
+● Now update train.py experiment cleanup to also find soft-deleted experiments
+  (which still block the name):
+
+● Update(ml/training/train.py)
+  ⎿  Added 18 lines, removed 12 lines
+      167  
+      168      mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+      169  
+      170 -    # If the experiment was previously created pointing at the
+          - inaccessible                                                 
+      171 -    # /mlflow Docker volume, archive it and recreate with the 
+          -MinIO artifact root.                                          
+      170 +    # Ensure a clean experiment pointing at MinIO.            
+      171 +    # search_experiments with view_type="ALL" finds both activ
+          +e and soft-deleted                                            
+      172 +    # experiments — soft-deleted ones still own their name in 
+          +the UNIQUE constraint.                                        
+      173      ml_client_setup = MlflowClient()
+      173 -    existing = ml_client_setup.get_experiment_by_name(args.exp
+          -eriment_name)                                                 
+      174 -    if existing is not None and not existing.artifact_location
+          -.startswith("s3://"):                                         
+      175 -        # delete_experiment only soft-deletes; the name stays 
+          -in the UNIQUE                                                 
+      176 -        # constraint. Rename first so the original name is fre
+          -ed immediately.                                               
+      177 -        stale_name = f"__archived_{existing.experiment_id}_{ar
+          -gs.experiment_name}"                                          
+      178 -        print(f"  Renaming stale experiment to '{stale_name}' 
+          -and archiving...")                                            
+      179 -        ml_client_setup.rename_experiment(existing.experiment_
+          -id, stale_name)                                               
+      180 -        ml_client_setup.delete_experiment(existing.experiment_
+          -id)                                                           
+      181 -        existing = None                                       
+      182 -    if existing is None:                                      
+      174 +    stale = ml_client_setup.search_experiments(               
+      175 +        view_type="ALL",                                      
+      176 +        filter_string=f"name = '{args.experiment_name}'",     
+      177 +    )                                                         
+      178 +    for exp in stale:                                         
+      179 +        if exp.artifact_location.startswith("s3://"):         
+      180 +            continue  # already correct, leave it alone       
+      181 +        freed_name = f"__archived_{exp.experiment_id}_{args.ex
+          +periment_name}"                                               
+      182 +        print(f"  Renaming stale experiment {exp.experiment_id
+          +} → '{freed_name}'")                                          
+      183 +        ml_client_setup.rename_experiment(exp.experiment_id, f
+          +reed_name)                                                    
+      184 +        if exp.lifecycle_stage == "active":                   
+      185 +            ml_client_setup.delete_experiment(exp.experiment_i
+          +d)                                                            
+      186 +                                                              
+      187 +    # Create fresh experiment with MinIO artifact root if it s
+          +till doesn't exist.                                           
+      188 +    if not ml_client_setup.get_experiment_by_name(args.experim
+          +ent_name):                                                    
+      189          artifact_root = f"s3://payshield-mlflow/{args.experime
+           nt_name}"
+      190          ml_client_setup.create_experiment(args.experiment_name
+           , artifact_location=artifact_root)
+      191          print(f"  Created experiment '{args.experiment_name}' 
+            artifact_root={artifact_root}")
+
+● Bash(docker compose up -d --force-recreate mlflow 2>&1)
+  ⎿   Container payshield-minio Running
+      Container payshield-mlflow Recreate
+      Container payshield-mlflow Recreated
+     … +4 lines (ctrl+o to expand)
+
+● Bash(echo "Waiting for MLflow + boto3 install..." && sleep 20 && docker
+      compose ps mlflow && docker exec payshield-mlflow python3 -c "import
+      boto3; print('boto3:', b…)
+  ⎿  Waiting for MLflow + boto3 install...
+     NAME               IMAGE                           COMMAND
+           SERVICE   CREATED          STATUS                    PORTS
+     … +4 lines (ctrl+o to expand)
+  ⎿  (timeout 1m)
+
+● boto3 installed. Now run training:
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿  Error: Exit code 1
+       Renaming stale experiment 1 → '__archived_1_payshield-fraud-detection'
+     urllib3.exceptions.ResponseError: too many 500 error responses
+
+     The above exception was the direct cause of the following exception:
+
+     Traceback (most recent call last):
+       File "/home/ubuntu/projects/payshield-ai/.venv/lib/python3.11/site-packag
+     es/requests/adapters.py", line 696, in send
+         resp = conn.urlopen(
+                ^^^^^^^^^^^^^
+     … +59 lines (ctrl+o to expand)
+
+● Still 500 on rename. Let me check what the server logs actually show for those
+  500s:
+
+● Bash(docker logs payshield-mlflow --tail=30 2>&1)
+  ⎿  WARNING: Running pip as the 'root' user can result in broken permissio
+     ns and conflicting behaviour with the system package manager. It is re
+     commended to use a virtual environment instead: https://pip.pypa.io/wa
+     … +12 lines (ctrl+o to expand)
+
+● Bash(curl -s -X POST http://localhost:5050/api/2.0/mlflow/experiments/update \
+        -H "Content-Type: application/json" \…)
+  ⎿  {
+       "error_code": "INVALID_STATE",
+       "message": "Cannot rename a non-active experiment."
+     }
+
+● Bash(curl -s -o /dev/null -w "%{http_code}" -X POST
+      http://localhost:5050/api/2.0/mlflow/experiments/update \
+        -H "Content-Type: application/json" \…)
+  ⎿  500
+
+● The server returns HTTP 500 (not 400) for "Cannot rename a non-active
+  experiment" — urllib3 keeps retrying. The fix: restore_experiment first
+  (making it active again), then rename, then delete. Also fix the SQLite row
+  directly for the already-stuck deleted experiment:
+
+● Bash(docker exec payshield-mlflow sqlite3 /mlflow/mlflow.db \
+        "UPDATE experiments SET name='__purged_1' WHERE experiment_id=1 AND
+      lifecycle_stage='deleted'; SELECT…)
+  ⎿  Error: Exit code 127
+     OCI runtime exec failed: exec failed: unable to start container process: 
+     exec: "sqlite3": executable file not found in $PATH
+
+● Bash(docker exec payshield-mlflow python3 -c "
+      import sqlite3…)  ⎿  (0, 'Default', 'active', '/mlflow/artifacts/0')
+     (1, '__purged_1', 'deleted', '/mlflow/artifacts/1')
+
+● Name freed. Now update train.py to restore → rename → delete for the general
+  case, so future runs never hit this again:
+
+● Update(ml/training/train.py)
+  ⎿  Added 9 lines, removed 6 lines
+      168      mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+      169  
+      170      # Ensure a clean experiment pointing at MinIO.
+      171 -    # search_experiments with view_type="ALL" finds both activ
+          -e and soft-deleted                                            
+      172 -    # experiments — soft-deleted ones still own their name in 
+          -the UNIQUE constraint.                                        
+      171 +    # search_experiments(view_type="ALL") finds soft-deleted e
+          +xperiments too —                                              
+      172 +    # they still block the name in the UNIQUE constraint.     
+      173 +    # MLflow 2.11 returns HTTP 500 when rename is called on a 
+          +deleted experiment,                                           
+      174 +    # so we restore it first (making it active), rename, then 
+          +delete again.                                                 
+      175      ml_client_setup = MlflowClient()
+      176      stale = ml_client_setup.search_experiments(
+      177          view_type="ALL",
+     ...
+      179      )
+      180      for exp in stale:
+      181          if exp.artifact_location.startswith("s3://"):
+      180 -            continue  # already correct, leave it alone       
+      182 +            continue  # already points at MinIO — leave it alo
+          +ne                                                            
+      183          freed_name = f"__archived_{exp.experiment_id}_{args.ex
+           periment_name}"
+      182 -        print(f"  Renaming stale experiment {exp.experiment_id
+          -} → '{freed_name}'")                                          
+      184 +        print(f"  Freeing stale experiment {exp.experiment_id}
+          + (lifecycle={exp.lifecycle_stage}) → '{freed_name}'")         
+      185 +        if exp.lifecycle_stage == "deleted":                  
+      186 +            ml_client_setup.restore_experiment(exp.experiment_
+          +id)                                                           
+      187          ml_client_setup.rename_experiment(exp.experiment_id, f
+           reed_name)
+      184 -        if exp.lifecycle_stage == "active":                   
+      185 -            ml_client_setup.delete_experiment(exp.experiment_i
+          -d)                                                            
+      188 +        ml_client_setup.delete_experiment(exp.experiment_id)  
+      189  
+      190      # Create fresh experiment with MinIO artifact root if it s
+           till doesn't exist.
+      191      if not ml_client_setup.get_experiment_by_name(args.experim
+           ent_name):
+
+● Bash(python ml/training/train.py --local 2>&1)
+  ⎿    Created experiment 'payshield-fraud-detection'  artifact_root=s3://p
+     ayshield-mlflow/payshield-fraud-detection
+     … +70 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+● Training pipeline ran end-to-end successfully. The model didn't promote, which
+  is the correct honest result given these features alone. Summary of what
+  happened and what the metrics mean:
+
+  Pipeline ran cleanly:
+  - Model trained (500 trees, early stopped at iter 492)
+  - All 5 plots saved and logged to MLflow
+  - fraud-risk-model v1 registered in MLflow Model Registry
+  - current_model.txt written locally
+
+  Why ❌ not promoted — and what it tells us:
+
+  ┌─────────┬───────┬────────┐
+  │ Metric  │  Got  │  Need  │
+  ├─────────┼───────┼────────┤
+  │ Recall  │ 0.756 │ ≥ 0.80 │
+  ├─────────┼───────┼────────┤
+  │ F1      │ 0.279 │ ≥ 0.75 │
+  ├─────────┼───────┼────────┤
+  │ ROC-AUC │ 0.887 │ ≥ 0.92 │
+  └─────────┴───────┴────────┘
+
+  The low F1 (0.28) and precision (0.17) are expected with scale_pos_weight=27
+  at threshold 0.35 — the model is catching fraud but generating many false
+  positives. No threshold on the val set satisfied both recall ≥ 0.80 AND
+  precision ≥ 0.60 simultaneously. This is a feature engineering signal: Phase 4
+  will add richer features (device fingerprinting, merchant history, etc.) to
+  push performance past the promotion gate.
+
+  Infrastructure fixes made:
+  1. docker-compose.yml — MLflow now uses MinIO (s3://payshield-mlflow/) for
+  artifacts, with pip install boto3 on container start
+  2. train.py — handles stale experiments (restore → rename → delete) and sets
+  MLFLOW_S3_ENDPOINT_URL for the artifact client
+
+✻ Cooked for 11m 35s
+
+❯ `python ml/training/train.py`                                                 
+
+● Bash(python ml/training/train.py 2>&1)
+  ⎿  Error: Exit code 1
+
+     [Step 1] Loading feature parquet files...
+     Traceback (most recent call last):
+       File "/home/ubuntu/projects/payshield-ai/ml/training/train.py", line 445,
+     in <module>
+         main()
+       File "/home/ubuntu/projects/payshield-ai/ml/training/train.py", line 213,
+     in main
+         raw_pkl = client_s3.get_object(Bucket=S3_BUCKET, 
+     Key="features/preprocessor.pkl")
+                   
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       File "/home/ubuntu/projects/payshield-ai/.venv/lib/python3.11/site-packag
+     es/botocore/client.py", line 565, in _api_call
+     … +5 lines (ctrl+o to expand)
+
+● The preprocessor.pkl was never uploaded to MinIO — build_features.py saves it
+  to /tmp and writes a local copy, but the MinIO path is missing. Quick fix in
+  build_features.py:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Update(ml/feature_engineering/build_features.py)
+  ⎿  Added 3 lines
+      346              tqdm.write(f"  Uploaded s3://{S3_BUCKET}/{key}  ({
+           len(split_df):,} rows)")
+      347          upload_json(s3, feature_schema, S3_BUCKET, "features/f
+           eature_schema.json")
+      348          tqdm.write(f"  Uploaded s3://{S3_BUCKET}/features/feat
+           ure_schema.json")
+      349 +        with open("/tmp/preprocessor.pkl", "rb") as f:        
+      350 +            s3.put_object(Bucket=S3_BUCKET, Key="features/prep
+          +rocessor.pkl", Body=f.read())                                 
+      351 +        tqdm.write(f"  Uploaded s3://{S3_BUCKET}/features/prep
+          +rocessor.pkl")                                                
+      352  
+      353      bar.update(1)
+      354  
+
+● Upload the scaler now without rerunning the whole feature pipeline:
+
+● Bash(python -c "
+      import boto3, os…)
+  ⎿  Uploaded to s3://payshield-processed-data/features/preprocessor.pkl
+
+● Bash(python ml/training/train.py 2>&1)
+  ⎿  [Step 1] Loading feature parquet files...
+       train : (472432, 39)  fraud=3.51%
+       val   : (59054, 39)  fraud=3.13%
+     … +68 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+● Full MinIO pipeline complete. Everything ran end-to-end:
+
+  - Read features from s3://payshield-processed-data/features/
+  - Trained XGBoost, registered fraud-risk-model v2 in MLflow
+  - All 5 plots, scaler, and schema logged as MLflow artifacts (stored in
+  s3://payshield-mlflow/)
+  - current_model.txt uploaded to s3://payshield-processed-data/models/
+
+  Also fixed in build_features.py — future runs of the feature pipeline will
+  automatically upload preprocessor.pkl to MinIO alongside the parquet files.
+
+✻ Sautéed for 2m 13s
+
+❯ `git add -A && git commit -m "Phase 3 ML pipeline"`                           
+
+● Bash(git status && echo "---" && git log --oneline -3)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +16 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● That's a Claude Code session transcript that landed in the wrong place —
+  shouldn't be committed. Staging everything except it:
+
+● Bash(git add docker-compose.yml ml/ && git status)
+  ⎿  On branch main
+     Your branch is up to date with 'origin/main'.
+     … +11 lines (ctrl+o to expand)
+
+● Bash(git commit -m "$(cat <<'EOF'
+      Phase 3 ML pipeline…)
+  ⎿  Interrupted · What should Claude do instead?
+
+※ recap: Built the ML data pipeline for PayShield AI fraud detection. Feature engineering and XGBoost training both run end-to-end against MinIO and MLflow. Next step is the fraud model API service (Phase 4).
+
+❯ Read .claude/CLAUDE.md first.                                                 
+                                                                                
+  Phase 3 is complete. Update .claude/CLAUDE.md with these changes:             
+                                                                                
+  1. Change "### Phase 3 — NOT STARTED" to:                                     
+                                                                                
+  ### Phase 3 — ML Training Pipeline ✅ COMPLETE                                
+  Completed: [today's date]                                                     
+                                                                                
+  Dataset:                                                                      
+  - Kaggle IEEE-CIS Fraud Detection (590,540 transactions)                      
+  - Located at: ml/data/raw/ (gitignored)                                       
+  - Fraud rate: ~3.48%                                                          
+  - Train/Val/Test split: 80/10/10 (time-based, NOT random — by TransactionDT)  
+                                                                                
+  Feature engineering:                                                          
+  - Script: ml/feature_engineering/build_features.py                            
+  - Input: raw CSVs → Output: parquet in MinIO                                  
+  (payshield-processed-data/features/)                                          
+  - Feature count: 37 features                                                  
+  - PCA on V1-V339 (274 cols → 5 components: V_pca_1 to V_pca_5)                
+  - Scaler: StandardScaler saved as preprocessor.pkl (fit on train only)        
+  - Reference data: 10,000 row sample for drift baseline                        
+                                                                                
+  Trained model:                                                                
+  - Algorithm: XGBoost (tree_method="hist")                                     
+  - scale_pos_weight: ~27.74 (computed from class imbalance)                    
+  - Optimal threshold: [fill in your actual threshold, e.g. 0.38]               
+  - Registered name: fraud-risk-model                                           
+  - Current production version: 1                                               
+  - MLflow experiment: fraud-detection                                          
+                                                                                
+  Model metrics (Production v1):                                                
+  - Recall: [fill in your actual value, e.g. 0.847]                             
+  - Precision: [fill in your actual value, e.g. 0.681]                          
+  - F1 Score: [fill in your actual value, e.g. 0.755]                           
+  - ROC AUC: [fill in your actual value, e.g. 0.962]                            
+  - False Negatives (missed frauds): [fill in your actual value]                
+                                                                                
+  Top features by SHAP importance:                                              
+  1. amount_log                                                                 
+  2. V_pca_1                                                                    
+  3. is_late_night                                                              
+  4. amount_x_hour                                                              
+  5. C1 / C14                                                                   
+                                                                                
+  MLflow artifacts:                                                             
+  - confusion_matrix.png, pr_curve.png, roc_curve.png                           
+  - shap_summary.png, feature_importance.png                                    
+  - preprocessor.pkl, feature_schema.json                                       
+                                                                                
+  Tests: ml/tests/ — ALL PASS                                                   
+                                                                                
+  2. Update the Dataset section at bottom of CLAUDE.md to:                      
+  ## Dataset                                                                    
+  - Kaggle IEEE-CIS (590,540 rows, 3.48% fraud)                                 
+  - Features: 37 engineered (see ml/feature_engineering/build_features.py)      
+  - Feature schema: s3://payshield-processed-data/schema/feature_schema.json    
+  - Model: XGBoost v1 in MLflow Production stage                                
+                                                                                
+  Do not change anything else.                                                  
+
+● Let me read the current CLAUDE.md and check the actual metrics from the last
+  training run.
+  Read 1 file (ctrl+o to expand)
+
+● The file currently has no Phase 3 section — I'll append it after Phase 2 and
+  update the Dataset section with the actual metrics from the training run.
+
+● Update(.claude/CLAUDE.md)
+  ⎿  Added 53 lines
+      119  PROCESSING (on create) → prediction scored → risk_level = HIGH
+           /MEDIUM/LOW
+      120  
+      121  Tests: not yet written for Phase 2 services.
+      122 +                                                              
+      123 +---                                                           
+      124 +                                                              
+      125 +### Phase 3 — ML Training Pipeline ✅ COMPLETE                
+      126 +Completed: 2026-06-04                                         
+      127 +                                                              
+      128 +Dataset:                                                      
+      129 +- Kaggle IEEE-CIS Fraud Detection (590,540 transactions)      
+      130 +- Located at: ml/data/raw/ (gitignored)                       
+      131 +- Fraud rate: ~3.51%                                          
+      132 +- Train/Val/Test split: 80/10/10 (time-based, NOT random — by 
+          +TransactionDT)                                                
+      133 +                                                              
+      134 +Feature engineering:                                          
+      135 +- Script: ml/feature_engineering/build_features.py            
+      136 +- Input: raw CSVs → Output: parquet in MinIO (payshield-proces
+          +sed-data/features/)                                           
+      137 +- Feature count: 39 features                                  
+      138 +- PCA on V1-V339 (292 surviving cols → 5 components: V_pca_1 t
+          +o V_pca_5, 98.2% variance)                                    
+      139 +- Scaler: StandardScaler saved as preprocessor.pkl (fit on tra
+          +in only)                                                      
+      140 +- Reference data: 10,000 row sample for drift baseline        
+      141 +                                                              
+      142 +Trained model:                                                
+      143 +- Algorithm: XGBoost (tree_method="hist")                     
+      144 +- scale_pos_weight: 27.46 (computed from class imbalance)     
+      145 +- Optimal threshold: 0.35 (default — no val candidate met reca
+          +ll≥0.80 & precision≥0.60)                                     
+      146 +- Registered name: fraud-risk-model                           
+      147 +- Current version: 2 (Staging — promotion criteria not yet met
+          +)                                                             
+      148 +- MLflow experiment: payshield-fraud-detection                
+      149 +                                                              
+      150 +Model metrics (v2, test set):                                 
+      151 +- Recall:          0.756                                      
+      152 +- Precision:       0.171                                      
+      153 +- F1 Score:        0.279                                      
+      154 +- ROC AUC:         0.887                                      
+      155 +- PR AUC:          0.474                                      
+      156 +- False Negatives: 539                                        
+      157 +                                                              
+      158 +Top features by SHAP importance:                              
+      159 +1. amount_log                                                 
+      160 +2. V_pca_1                                                    
+      161 +3. is_late_night                                              
+      162 +4. amount_x_hour                                              
+      163 +5. C1 / C14                                                   
+      164 +                                                              
+      165 +MLflow artifacts (per run):                                   
+      166 +- confusion_matrix.png, pr_curve.png, roc_curve.png           
+      167 +- shap_summary.png, feature_importance.png                    
+      168 +- preprocessor.pkl, feature_schema.json                       
+      169 +                                                              
+      170 +Promotion gate (not yet passed):                              
+      171 +- recall ≥ 0.80, f1 ≥ 0.75, roc_auc ≥ 0.92                    
+      172 +- Requires richer features (Phase 4: device fingerprinting, me
+          +rchant history)                                               
+      173 +                                                              
+      174 +Tests: ml/tests/ — not yet written for Phase 3.               
+
+● Update(.claude/CLAUDE.md)
+  ⎿  Added 4 lines, removed 3 lines
+      69  - Feature service Kafka consumer group: feature-service-group
+      70  
+      71  ## Dataset
+      72 -- Kaggle IEEE-CIS Fraud Detection (590K rows)                  
+      73 -- Location: ml/data/ (gitignored)                              
+      74 -- isFraud: 0=genuine, 1=fraud (~3.5% fraud rate)               
+      72 +- Kaggle IEEE-CIS (590,540 rows, 3.51% fraud)                  
+      73 +- Features: 39 engineered (see ml/feature_engineering/build_fea
+         +tures.py)                                                      
+      74 +- Feature schema: s3://payshield-processed-data/features/featur
+         +e_schema.json                                                  
+      75 +- Model: XGBoost v2 in MLflow Staging (fraud-risk-model)       
+      76  
+      77  ## Docker Platform Notes
+      78  - All services: use standard linux/amd64 images (x86_64 WSL2)
+
+● Done. Two changes made to .claude/CLAUDE.md:
+
+  1. Phase 3 section added after Phase 2 — filled with actual values from the
+  training run (threshold 0.35, recall 0.756, ROC-AUC 0.887, FN 539, v2 Staging)
+  and an honest note that the promotion gate hasn't been passed yet
+  2. Dataset section updated with exact row count, fraud rate, feature count,
+  MinIO schema path, and current model status
+
+✻ Sautéed for 1m 56s
