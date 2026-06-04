@@ -65,6 +65,8 @@ Primary model: XGBoost with threshold=0.35 (maximize recall).
 - Fraud probability < 0.35 → LOW risk (allow)
 - Model must have recall >= 0.80 to be promoted to Production
 - Drift check mandatory before retraining
+- Transaction status on create: fraud_prediction="PENDING", risk_level="UNKNOWN", status="PROCESSING"
+- Feature service Kafka consumer group: feature-service-group
 
 ## Dataset
 - Kaggle IEEE-CIS Fraud Detection (590K rows)
@@ -75,3 +77,45 @@ Primary model: XGBoost with threshold=0.35 (maximize recall).
 - All services: use standard linux/amd64 images (x86_64 WSL2)
 - No --platform flags needed (unlike Mac M3 which needs arm64/amd64 switching)
 - Kafka/Zookeeper: confluentinc images work natively on x86_64
+
+---
+
+### Phase 2 — Transaction Service + Kafka ✅ COMPLETE
+Completed: 2026-06-04
+
+New services built:
+- transaction-service (port 8003):
+  POST /transactions — stores in DynamoDB + publishes to Kafka
+  GET /transactions — user's history via GSI (user-id-index)
+  GET /transactions/fraud — HIGH/MEDIUM risk list via GSI (risk-level-index, ADMIN/ANALYST only)
+  GET /transactions/{id} — single transaction by PK
+  PATCH /transactions/{id}/prediction — updates fraud result (called by feature-service)
+- feature-service (port 8005):
+  Kafka consumer: transactions.raw → build features → call fraud model → PATCH transaction
+  Redis velocity keys: vel:1h:{user_id}, vel:24h:{user_id}, devices:{user_id}
+  Exposes GET /health and GET /metrics only (no business routes)
+
+Kafka topics created (all partitions=1, replication=1 for local dev):
+- transactions.raw
+- transactions.validated
+- transactions.features
+- transactions.scored
+- transactions.failed
+- model.drift.detected
+- alerts.fraud.highrisk
+
+Transaction flow:
+User submits → BFF (auth check) → transaction-service (DynamoDB + Kafka)
+→ feature-service (Kafka consumer) → builds features + Redis velocity
+→ fraud-model-api (currently UNKNOWN — Phase 4)
+→ PATCH transaction-service → DynamoDB updated
+
+Frontend pages added:
+- NewTransaction (/transactions/new): payment form with polling
+- TransactionHistory (/transactions): risk-level badges, auto-refresh 10s
+- Layout sidebar with navigation
+
+Transaction status lifecycle:
+PROCESSING (on create) → prediction scored → risk_level = HIGH/MEDIUM/LOW
+
+Tests: not yet written for Phase 2 services.
