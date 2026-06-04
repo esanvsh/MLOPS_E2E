@@ -216,3 +216,65 @@ Transaction submitted → Kafka → Feature service → Fraud model API → Dyna
 Frontend shows: HIGH/MEDIUM/LOW risk with probability
 
 Tests: services/fraud-model-api/tests/test_model_api.py — ALL PASS
+
+---
+
+### Phase 6 — Monitoring & Observability ✅ COMPLETE
+Completed: 2026-06-04
+
+Prometheus alerts configured (observability/prometheus/alerts.yml):
+- FraudModelDown: fires if model_loaded_status == 0 for 2 minutes (critical)
+- HighFraudRate: fires if fraud rate > 15% for 5 minutes (warning)
+- HighPredictionLatency: fires if p99 > 500ms for 3 minutes (warning)
+
+Grafana dashboards (auto-provisioned):
+- payshield-overview.json: transactions, fraud rate, service health, infra
+- model-monitoring.json: model version, latency trends, confidence distribution
+
+Alertmanager:
+- Routes critical alerts to webhook: http://host.docker.internal:9999/alert
+- Test: stop fraud-model-api → FraudModelDown fires within 2 minutes
+
+Loki log queries that work:
+- {service="fraud-model-api"} | json | risk_level="HIGH"
+- {service="transaction-service"} | json
+- {service="auth-service"} | json | level="error"
+
+Alert test verified: stop service → alert fires → restart → alert resolves ✅
+
+---
+
+### Phase 7 — Drift Detection & Retraining ✅ COMPLETE
+Completed: 2026-06-04
+
+Drift monitor service (port 8006):
+- Script: services/drift-monitor/app/drift_check.py
+- Library: Evidently AI 0.4.22
+- Trigger: POST /trigger-check or manually via docker compose exec
+- Scheduled: every 6 hours (asyncio background task in main.py)
+
+Drift check logic:
+- Reference data: s3://payshield-processed-data/features/reference_features.parquet (10K rows)
+- Current data: s3://payshield-processed-data/inference/live_features_{date}.parquet
+- If no current data: uses synthetic data (Gaussian noise on reference)
+- Drift threshold: DRIFT_THRESHOLD_SHARE=0.30 (30% of features must drift)
+
+Decision tree:
+1. Data quality OK? → If not: block, do not retrain
+2. Enough data (>= MIN_CURRENT_ROWS)? → If not: skip
+3. Feature drift share > 30%? → retrain
+4. Recall < 0.80? → retrain (if ground truth available)
+5. All OK → "System healthy", no action
+
+Retraining flow (services/drift-monitor/app/retrain_trigger.py):
+drift detected → feature engineering refresh → train.py → promote if recall >= 0.80
+→ POST /model/reload → fraud-model-api hot-swaps model → update reference data
+
+Simulation:
+- scripts: services/drift-monitor/app/simulate_drift.py
+- make drift-simulate → creates drifted current data
+- make drift-check → detects it (>30% features drifted)
+
+Kafka event published on drift: topic=model.drift.detected
+
+Tests: services/drift-monitor/tests/test_drift.py — ALL PASS
