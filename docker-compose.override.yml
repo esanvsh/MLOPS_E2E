@@ -40,3 +40,50 @@ services:
     networks:
       - payshield-network
     restart: unless-stopped
+
+  transaction-service:
+    build:
+      context: services/transaction-service
+      dockerfile: Dockerfile
+    container_name: payshield-transaction
+    ports:
+      - "8003:8080"
+    env_file: .env
+    environment:
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      FRAUD_MODEL_API_URL: http://fraud-model-api:8080
+      APP_ENV: development
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  feature-service:
+    build:
+      context: services/feature-service
+      dockerfile: Dockerfile
+    container_name: payshield-feature
+    ports:
+      - "8005:8080"
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      FRAUD_MODEL_API_URL: http://fraud-model-api:8080
+      TRANSACTION_SERVICE_URL: http://transaction-service:8080
+      APP_ENV: development
+    depends_on:
+      - kafka
+      - redis
+      - transaction-service
+    networks:
+      - payshield-network
+    restart: unless-stopped

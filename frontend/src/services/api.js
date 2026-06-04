@@ -24,21 +24,24 @@ api.interceptors.response.use(
 )
 
 export const register = (email, password) =>
-  api.post('/register', { email, password })
+  api.post('/api/auth/register', { email, password })
 
 export const login = (email, password) =>
-  api.post('/login', { email, password })
+  api.post('/api/auth/login', { email, password })
 
 export const logout = () =>
-  api.post('/logout')
+  api.post('/api/auth/logout')
 
 export const createTransaction = (data) =>
-  api.post('/transactions', data)
+  api.post('/api/transactions', data)
 
 export const getTransactions = () =>
-  api.get('/transactions')
+  api.get('/api/transactions')
 
 export const getTransaction = (id) =>
-  api.get(`/transactions/${id}`)
+  api.get(`/api/transactions/${id}`)
+
+export const getAdminSummary = () =>
+  api.get('/api/admin/summary')
 
 export default api

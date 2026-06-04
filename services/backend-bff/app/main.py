@@ -82,7 +82,7 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# ── Auth proxy helpers ────────────────────────────────────────────────────────
+# ── Proxy helpers ─────────────────────────────────────────────────────────────
 
 async def _forward(upstream_resp: httpx.Response) -> Response:
     return Response(
@@ -99,42 +99,119 @@ def _auth_headers(request: Request) -> dict:
     return headers
 
 
-# ── Auth routes ───────────────────────────────────────────────────────────────
+async def _validate_token(request: Request) -> dict:
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = auth.removeprefix("Bearer ")
+    try:
+        r = await _http.post(
+            f"{AUTH_SERVICE_URL}/validate",
+            params={"token": token},
+            timeout=5.0,
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return r.json()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error("auth_validate_error", error=str(exc))
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
 
-@app.post("/register")
-async def register(request: Request):
-    resp = await _http.post(
-        f"{AUTH_SERVICE_URL}/register",
-        json=await request.json(),
-    )
+
+def _txn_headers(user: dict) -> dict:
+    return {
+        "X-User-ID": user["user_id"],
+        "X-User-Role": user.get("role", "CUSTOMER"),
+    }
+
+
+# ── Auth routes  (/api/auth/* canonical, legacy bare paths kept for compat) ───
+
+async def _register(request: Request) -> Response:
+    resp = await _http.post(f"{AUTH_SERVICE_URL}/register", json=await request.json())
     return await _forward(resp)
 
-
-@app.post("/login")
-async def login(request: Request):
-    resp = await _http.post(
-        f"{AUTH_SERVICE_URL}/login",
-        json=await request.json(),
-    )
+async def _login(request: Request) -> Response:
+    resp = await _http.post(f"{AUTH_SERVICE_URL}/login", json=await request.json())
     return await _forward(resp)
 
-
-@app.post("/validate")
-async def validate(request: Request):
-    token = request.query_params.get("token", "")
+async def _validate(request: Request) -> Response:
     resp = await _http.post(
         f"{AUTH_SERVICE_URL}/validate",
-        params={"token": token},
+        params={"token": request.query_params.get("token", "")},
         headers=_auth_headers(request),
     )
     return await _forward(resp)
 
+async def _logout(request: Request) -> Response:
+    resp = await _http.post(f"{AUTH_SERVICE_URL}/logout", headers=_auth_headers(request))
+    return await _forward(resp)
 
-@app.post("/logout")
-async def logout(request: Request):
+
+app.add_api_route("/api/auth/register", _register, methods=["POST"], status_code=201)
+app.add_api_route("/api/auth/login",    _login,    methods=["POST"])
+app.add_api_route("/api/auth/validate", _validate, methods=["POST"])
+app.add_api_route("/api/auth/logout",   _logout,   methods=["POST"])
+
+# Legacy bare paths — kept so existing curl examples and frontend still work
+app.add_api_route("/register", _register, methods=["POST"], status_code=201)
+app.add_api_route("/login",    _login,    methods=["POST"])
+app.add_api_route("/validate", _validate, methods=["POST"])
+app.add_api_route("/logout",   _logout,   methods=["POST"])
+
+
+# ── Transaction routes ────────────────────────────────────────────────────────
+
+@app.post("/api/transactions", status_code=201)
+async def create_transaction(request: Request):
+    user = await _validate_token(request)
     resp = await _http.post(
-        f"{AUTH_SERVICE_URL}/logout",
-        headers=_auth_headers(request),
+        f"{TRANSACTION_SERVICE_URL}/transactions",
+        json=await request.json(),
+        headers=_txn_headers(user),
+    )
+    return await _forward(resp)
+
+
+@app.get("/api/transactions/fraud")
+async def get_fraud_transactions(request: Request):
+    user = await _validate_token(request)
+    resp = await _http.get(
+        f"{TRANSACTION_SERVICE_URL}/transactions/fraud",
+        headers=_txn_headers(user),
+    )
+    return await _forward(resp)
+
+
+@app.get("/api/transactions/{transaction_id}")
+async def get_transaction(transaction_id: str, request: Request):
+    user = await _validate_token(request)
+    resp = await _http.get(
+        f"{TRANSACTION_SERVICE_URL}/transactions/{transaction_id}",
+        headers=_txn_headers(user),
+    )
+    return await _forward(resp)
+
+
+@app.get("/api/transactions")
+async def get_transactions(request: Request):
+    user = await _validate_token(request)
+    resp = await _http.get(
+        f"{TRANSACTION_SERVICE_URL}/transactions",
+        headers=_txn_headers(user),
+    )
+    return await _forward(resp)
+
+
+@app.patch("/api/transactions/{transaction_id}/prediction")
+async def update_prediction(transaction_id: str, request: Request):
+    user = await _validate_token(request)
+    resp = await _http.patch(
+        f"{TRANSACTION_SERVICE_URL}/transactions/{transaction_id}/prediction",
+        json=await request.json(),
+        headers=_txn_headers(user),
     )
     return await _forward(resp)
 
@@ -146,11 +223,15 @@ async def health():
     checks: dict[str, str] = {}
     overall = "healthy"
 
-    try:
-        r = await _http.get(f"{AUTH_SERVICE_URL}/health", timeout=5.0)
-        checks["auth_service"] = "healthy" if r.status_code == 200 else "unhealthy"
-    except Exception:
-        checks["auth_service"] = "unhealthy"
+    for name, url in [
+        ("auth_service", f"{AUTH_SERVICE_URL}/health"),
+        ("transaction_service", f"{TRANSACTION_SERVICE_URL}/health"),
+    ]:
+        try:
+            r = await _http.get(url, timeout=5.0)
+            checks[name] = "healthy" if r.status_code == 200 else "unhealthy"
+        except Exception:
+            checks[name] = "unhealthy"
 
     if any(v == "unhealthy" for v in checks.values()):
         overall = "degraded"

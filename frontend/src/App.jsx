@@ -3,6 +3,8 @@ import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import NewTransaction from './pages/NewTransaction'
+import TransactionHistory from './pages/TransactionHistory'
 import Layout from './components/Layout'
 import PrivateRoute from './components/PrivateRoute'
 
@@ -28,8 +30,8 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            {/* Placeholder routes so sidebar links don't 404 */}
-            <Route path="/transactions/*" element={<PlaceholderPage title="Transactions" />} />
+            <Route path="/transactions/new" element={<NewTransaction />} />
+            <Route path="/transactions" element={<TransactionHistory />} />
             <Route path="/monitoring" element={<PlaceholderPage title="Model Monitoring" />} />
             <Route path="/admin" element={<PlaceholderPage title="Admin" />} />
           </Route>
