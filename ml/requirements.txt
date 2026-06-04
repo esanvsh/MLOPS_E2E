@@ -1,0 +1,49 @@
+# ML Pipeline Dependencies — Python 3.11, Linux x86_64 (WSL2 Ubuntu 22.04)
+# Note: add `import matplotlib; matplotlib.use('Agg')` at the top of any script
+# that creates plots — required for headless rendering in WSL2 (no display).
+
+# Core ML
+xgboost==2.0.3
+scikit-learn==1.4.2
+imbalanced-learn==0.12.2
+
+# Data
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.0
+
+# Experiment tracking
+mlflow==2.11.0
+
+# Serialization / storage
+pyarrow==15.0.2
+fastparquet==2024.2.0
+
+# Visualization
+matplotlib==3.8.4
+seaborn==0.13.2
+plotly==5.22.0
+
+# Explainability
+shap==0.45.1
+
+# AWS / storage
+boto3==1.34.69
+s3fs==2024.3.1
+
+# Drift detection
+evidently==0.4.22
+
+# Notebooks
+jupyter==1.0.0
+jupyterlab==4.1.6
+ipywidgets==8.1.2
+
+# Testing
+pytest==8.1.1
+
+# Utilities
+python-dotenv==1.0.1
+tqdm==4.66.2
+structlog==24.1.0
+kaggle==1.6.12
