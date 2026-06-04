@@ -25,6 +25,22 @@ wait_for_http() {
     printf " ✅ ready (%ds)\n" "$elapsed"
 }
 
+wait_for_tcp() {
+    local name="$1" port="$2" max="${3:-60}"
+    local elapsed=0
+    printf "Waiting for %s" "$name"
+    while ! (echo > /dev/tcp/localhost/"$port") 2>/dev/null; do
+        if [[ $elapsed -ge $max ]]; then
+            printf " ❌ timed out after %ds\n" "$max" >&2
+            exit 1
+        fi
+        printf "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    printf " ✅ ready (%ds)\n" "$elapsed"
+}
+
 wait_for_kafka() {
     local max="${1:-90}"
     local elapsed=0
@@ -58,7 +74,7 @@ status_row() {
 
 echo ""
 echo "── Step 1: DynamoDB ─────────────────────────────────────────────────────────"
-wait_for_http "DynamoDB" "http://localhost:8000" 90
+wait_for_tcp "DynamoDB" 8000 90
 bash "$SCRIPT_DIR/setup-local-dynamodb.sh"
 
 # ── Step 2: MinIO ─────────────────────────────────────────────────────────────
@@ -87,7 +103,7 @@ status_row "Service" "URL" "Status"
 printf "  %s\n" "──────────────────────────────────────────────────────────────"
 
 # Infrastructure
-status_row "DynamoDB Local"     "http://localhost:8000"           "$(http_up http://localhost:8000)"
+status_row "DynamoDB Local"     "http://localhost:8000"           "$(tcp_up 8000)"
 status_row "MinIO API"          "http://localhost:9000"           "$(http_up http://localhost:9000/minio/health/live)"
 status_row "MinIO Console"      "http://localhost:9001"           "$(tcp_up 9001)"
 status_row "Redis"              "localhost:6379"                  "$(tcp_up 6379)"

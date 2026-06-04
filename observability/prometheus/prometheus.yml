@@ -1,0 +1,54 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  - job_name: backend-bff
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - backend-bff:8080
+
+  - job_name: auth-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - auth-service:8080
+
+  - job_name: transaction-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - transaction-service:8080
+
+  - job_name: fraud-model-api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - fraud-model-api:8080
+
+  - job_name: feature-service
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - feature-service:8080
+
+  - job_name: drift-monitor
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - drift-monitor:8080

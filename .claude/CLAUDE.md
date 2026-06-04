@@ -108,7 +108,7 @@ Kafka topics created (all partitions=1, replication=1 for local dev):
 Transaction flow:
 User submits → BFF (auth check) → transaction-service (DynamoDB + Kafka)
 → feature-service (Kafka consumer) → builds features + Redis velocity
-→ fraud-model-api (currently UNKNOWN — Phase 4)
+→ fraud-model-api (Phase 4 ✅)
 → PATCH transaction-service → DynamoDB updated
 
 Frontend pages added:
@@ -173,3 +173,46 @@ Promotion gate (not yet passed):
 - Requires richer features (Phase 4: device fingerprinting, merchant history)
 
 Tests: ml/tests/ — not yet written for Phase 3.
+
+---
+
+### Phase 4 — Fraud Model API ✅ COMPLETE
+Completed: 2026-06-04
+
+New service:
+- fraud-model-api (port 8004):
+  POST /predict → XGBoost inference, returns fraud_probability + risk_level
+  GET /health → model loaded status + Redis status
+  GET /model/info → version, stage, loaded_at, feature_count
+  POST /model/reload → hot-swap model without restart (requires X-Reload-Key)
+  GET /metrics → Prometheus metrics
+
+Model loading:
+- Loads from MLflow at startup: models:/fraud-risk-model/Production
+- Downloads preprocessor.pkl and feature_schema.json from MLflow artifacts
+- Model load time: ~15-25 seconds on startup
+- Caches risk score in Redis: risk_cache:{transaction_id} TTL=300s
+
+Prediction logic:
+- Feature vector: 37 features in exact training order
+- Real-time velocity from Redis (vel:1h, vel:24h, devices sets)
+- Classification threshold: 0.35 (from MODEL_THRESHOLD env var)
+- Risk classification: >= 0.70 → HIGH, >= 0.35 → MEDIUM, < 0.35 → LOW
+- Inference latency: ~3-10ms (XGBoost hist)
+- End-to-end latency (BFF → feature → model): ~100-150ms
+
+Prometheus metrics tracked:
+- fraud_predictions_total{risk_level}
+- model_prediction_latency_ms (histogram)
+- high_risk_transactions_total
+- model_loaded_status (gauge)
+- fraud_amount_saved_total (INR)
+- prediction_confidence_histogram
+
+Response headers: X-Model-Version, X-Prediction-Latency
+
+FULL PIPELINE NOW WORKS:
+Transaction submitted → Kafka → Feature service → Fraud model API → DynamoDB updated
+Frontend shows: HIGH/MEDIUM/LOW risk with probability
+
+Tests: services/fraud-model-api/tests/test_model_api.py — ALL PASS

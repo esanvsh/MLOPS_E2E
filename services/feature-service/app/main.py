@@ -168,16 +168,39 @@ async def build_inference_features(
 # ── Downstream calls ──────────────────────────────────────────────────────────
 
 async def _call_fraud_model(
-    transaction_id: str, features: dict[str, Any]
+    transaction_id: str, event: dict[str, Any], features: dict[str, Any]
 ) -> dict[str, Any]:
     try:
+        payload = {
+            "transaction_id": transaction_id,
+            "amount": float(event["amount"]),
+            "merchant_category": event.get("merchant_category", "other"),
+            "country": event.get("country", "IN"),
+            "hour": features["hour_of_day"],
+            "day_of_week": features["day_of_week"],
+            "payment_method": event.get("payment_method", "upi"),
+            "failed_attempts": event.get("failed_attempts", 0),
+            "is_new_device": features["is_new_device"],
+            "user_txn_count_24h": features["user_txn_count_24h"],
+            "addr_mismatch": features["addr_mismatch"],
+            "email_domain_risk": features["email_domain_risk"],
+            "is_high_risk_category": features["is_high_risk_category"],
+            "device_id": event.get("device_id", ""),
+            "user_id": event.get("user_id", ""),
+        }
         resp = await _http_client.post(
             f"{FRAUD_MODEL_API_URL}/predict",
-            json={"transaction_id": transaction_id, "features": features},
+            json=payload,
             timeout=5.0,
         )
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        return {
+            "fraud_probability": data["fraud_probability"],
+            "fraud_prediction": "FRAUD" if data["prediction"] == 1 else "GENUINE",
+            "risk_level": data["risk_level"],
+            "model_version": data["model_version"],
+        }
     except Exception as exc:
         MODEL_ERRORS.inc()
         log.warning("fraud_model_unavailable", error=str(exc), transaction_id=transaction_id)
@@ -240,7 +263,7 @@ async def _process_message(event: dict[str, Any]) -> None:
         log.error("feature_build_failed", error=str(exc), transaction_id=transaction_id)
         return
 
-    prediction = await _call_fraud_model(transaction_id, features)
+    prediction = await _call_fraud_model(transaction_id, event, features)
 
     await _patch_transaction(transaction_id, prediction)
     await _publish_scored_event(event, prediction)

@@ -5,7 +5,7 @@ export AWS_ACCESS_KEY_ID=local
 export AWS_SECRET_ACCESS_KEY=local
 export AWS_DEFAULT_REGION=us-east-1
 
-ENDPOINT="http://localhost:8000"
+ENDPOINT="${DYNAMODB_ENDPOINT:-http://localhost:8000}"
 
 # Run create-table; print ✅ on success, ⚠️ if already exists, exit 1 on other errors.
 create_table() {

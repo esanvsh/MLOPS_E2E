@@ -1,6 +1,6 @@
 services:
 
-  # ── Infrastructure ────────────────────────────────────────────────────────────
+  # ── Infrastructure ─────────────────────────────────────────────────────────────
 
   dynamodb-local:
     image: amazon/dynamodb-local:latest
@@ -47,7 +47,7 @@ services:
     networks:
       - payshield-network
 
-  # ── Kafka ─────────────────────────────────────────────────────────────────────
+  # ── Kafka ──────────────────────────────────────────────────────────────────────
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -59,9 +59,9 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     healthcheck:
       test: ["CMD", "cub", "zk-ready", "localhost", "2181"]
-      interval: 10s
+      interval: 15s
       timeout: 10s
-      retries: 5
+      retries: 6
       start_period: 15s
     networks:
       - payshield-network
@@ -69,8 +69,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: payshield-kafka
-    # 9092 on host → 29092 in container (PLAINTEXT_HOST listener)
-    # Docker services reach Kafka via kafka:9092 (PLAINTEXT listener)
+    # Docker services → kafka:9092 (PLAINTEXT); host → localhost:9092 → container:29092 (PLAINTEXT_HOST)
     ports:
       - "9092:29092"
     depends_on:
@@ -88,19 +87,19 @@ services:
       KAFKA_LOG_RETENTION_HOURS: 24
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 15s
+      interval: 20s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 8
+      start_period: 40s
     networks:
       - payshield-network
 
-  # ── Object Storage ────────────────────────────────────────────────────────────
+  # ── Object Storage ─────────────────────────────────────────────────────────────
 
   minio:
     image: minio/minio:latest
     container_name: payshield-minio
-    command: server /data --console-address :9001
+    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -118,7 +117,7 @@ services:
     networks:
       - payshield-network
 
-  # ── ML Platform ───────────────────────────────────────────────────────────────
+  # ── ML Platform ────────────────────────────────────────────────────────────────
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.11.0
@@ -143,21 +142,270 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
       start_period: 15s
     networks:
       - payshield-network
 
-# ── Volumes ───────────────────────────────────────────────────────────────────
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    container_name: payshield-dynamodb-init
+    entrypoint: ["/bin/bash", "/scripts/setup-local-dynamodb.sh"]
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+    volumes:
+      - ./scripts/setup-local-dynamodb.sh:/scripts/setup-local-dynamodb.sh:ro
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: "no"
+
+  # ── Application Services ───────────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: services/auth-service
+    container_name: payshield-auth
+    ports:
+      - "8002:8080"
+    environment:
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      DYNAMODB_REGION: us-east-1
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_ENV: development
+    env_file: .env
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  backend-bff:
+    build:
+      context: services/backend-bff
+    container_name: payshield-bff
+    ports:
+      - "8001:8080"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8080
+      TRANSACTION_SERVICE_URL: http://transaction-service:8080
+      APP_ENV: development
+    env_file: .env
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  transaction-service:
+    build:
+      context: services/transaction-service
+    container_name: payshield-transaction
+    ports:
+      - "8003:8080"
+    environment:
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      FRAUD_MODEL_API_URL: http://fraud-model-api:8080
+      APP_ENV: development
+    env_file: .env
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  fraud-model-api:
+    build:
+      context: services/fraud-model-api
+    container_name: payshield-fraud-model
+    ports:
+      - "8004:8080"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: fraud-risk-model
+      MODEL_STAGE: Production
+      REDIS_HOST: redis
+      MODEL_THRESHOLD: "0.35"
+      APP_ENV: development
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+      RELOAD_SECRET: payshield-reload-dev-secret
+    env_file: .env
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  feature-service:
+    build:
+      context: services/feature-service
+    container_name: payshield-feature
+    ports:
+      - "8005:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      FRAUD_MODEL_API_URL: http://fraud-model-api:8080
+      TRANSACTION_SERVICE_URL: http://transaction-service:8080
+      APP_ENV: development
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      fraud-model-api:
+        condition: service_started
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  drift-monitor:
+    build:
+      context: services/drift-monitor
+    container_name: payshield-drift
+    ports:
+      - "8006:8080"
+    environment:
+      S3_ENDPOINT_URL: http://minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      S3_BUCKET_PROCESSED: payshield-processed-data
+      S3_BUCKET_DRIFT: payshield-drift-reports
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      FRAUD_MODEL_API_URL: http://fraud-model-api:8080
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      APP_ENV: development
+    env_file: .env
+    volumes:
+      - ./ml:/app/ml
+    depends_on:
+      minio:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      fraud-model-api:
+        condition: service_started
+    networks:
+      - payshield-network
+    restart: unless-stopped
+
+  # ── Observability ──────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: payshield-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command: >
+      --config.file=/etc/prometheus/prometheus.yml
+      --storage.tsdb.retention.time=7d
+      --web.enable-lifecycle
+    networks:
+      - payshield-network
+
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: payshield-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - payshield-network
+
+  loki:
+    image: grafana/loki:2.9.5
+    container_name: payshield-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - payshield-network
+
+  promtail:
+    image: grafana/promtail:2.9.5
+    container_name: payshield-promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/loki/promtail-config.yaml:/etc/promtail/config.yaml:ro
+    command: -config.file=/etc/promtail/config.yaml
+    depends_on:
+      - loki
+    networks:
+      - payshield-network
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: payshield-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command: --config.file=/etc/alertmanager/alertmanager.yml
+    networks:
+      - payshield-network
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
 
 volumes:
   redis_data:
   minio_data:
   mlflow_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
 
-# ── Networks ──────────────────────────────────────────────────────────────────
+# ── Networks ───────────────────────────────────────────────────────────────────
 
 networks:
   payshield-network:

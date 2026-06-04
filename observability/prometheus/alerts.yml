@@ -1,0 +1,27 @@
+groups:
+  - name: payshield_alerts
+    rules:
+      - alert: FraudModelDown
+        expr: model_loaded_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fraud model not loaded"
+          description: "fraud-model-api has had no model for > 2 minutes"
+
+      - alert: HighFraudRate
+        expr: rate(fraud_predictions_total{risk_level="HIGH"}[5m]) / rate(fraud_predictions_total[5m]) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fraud rate exceeding 15%"
+
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.99, rate(model_prediction_latency_ms_bucket[5m])) > 500
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model p99 latency > 500ms"
