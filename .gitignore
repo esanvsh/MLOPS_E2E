@@ -49,5 +49,7 @@ mlartifacts/
 *.log
 logs/
 
-.claude
-.conversation
+.claude/
+.conversation/
+
+.gitignore
